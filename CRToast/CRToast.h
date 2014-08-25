@@ -6,6 +6,8 @@
 
 #import <Foundation/Foundation.h>
 
+NSString * const CRNumberOfNotificationsDidChangeNotification;
+
 /**
  CRToastInteractionType defines the types of interactions that can be injected into a CRToastIneractionResponder.
  */
@@ -364,5 +366,10 @@ extern NSString *const kCRToastAutorotateKey;
  @param animated If YES the notification will dismiss with its configure animation, otherwise it will immidiately disappear
  */
 + (void)dismissAllNotifications:(BOOL)animated;
+
+/**
+ Returns the number of notifications currently shown and will be shown.
+ */
++ (NSUInteger)numberOfNotifications;
 
 @end

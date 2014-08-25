@@ -7,6 +7,8 @@
 #import <QuartzCore/QuartzCore.h>
 #import "CRToast.h"
 
+NSString * const CRNumberOfNotificationsDidChangeNotification = @"CRNumberOfNotificationsDidChangeNotification";
+
 NSString *NSStringFromCRToastInteractionType(CRToastInteractionType interactionType) {
     switch (interactionType) {
         case CRToastInteractionTypeSwipeUp:
@@ -261,6 +263,7 @@ static NSDictionary *               kCRToastKeyClassMap                     = ni
 
 static BOOL _isiOS8OrLater = NO;
 
+static CGFloat const CRStatusBarMinimumHeight = 20.0f;
 static CGFloat const CRNavigationBarDefaultHeight = 45.0f;
 static CGFloat const CRNavigationBarDefaultHeightiPhoneLandscape = 33.0f;
 
@@ -272,12 +275,12 @@ static CGFloat CRGetStatusBarHeightForOrientation(UIInterfaceOrientation orienta
 	CGRect statusBarFrame = [[UIApplication sharedApplication] statusBarFrame];
 	
 	if (_isiOS8OrLater) {
-		return CGRectGetHeight(statusBarFrame);
+		return MAX(CRStatusBarMinimumHeight, CGRectGetHeight(statusBarFrame));
 	}
 	
     return (UIDeviceOrientationIsLandscape(orientation)) ?
     CGRectGetWidth(statusBarFrame) :
-    CGRectGetHeight(statusBarFrame);
+    MAX(CRStatusBarMinimumHeight, CGRectGetHeight(statusBarFrame));
 }
 
 static CGFloat CRGetStatusBarHeight() {
@@ -293,7 +296,7 @@ static CGFloat CRGetStatusBarWidthForOrientation(UIInterfaceOrientation orientat
 	
     return (UIDeviceOrientationIsPortrait(orientation)) ?
 	CGRectGetWidth(mainScreenBounds) :
-	CGRectGetHeight(mainScreenBounds);
+	MAX(CRStatusBarMinimumHeight, CGRectGetHeight(mainScreenBounds));
 }
 
 static CGFloat CRGetStatusBarWidth() {
@@ -1224,6 +1227,12 @@ typedef void (^CRToastAnimationStepBlock)(void);
     [[self manager] dismissAllNotifications:animated];
 }
 
++ (NSUInteger)numberOfNotifications
+{
+	CRToastManager *manager = [self manager];
+	return [[manager notifications] count];
+}
+
 + (instancetype)manager {
     static dispatch_once_t once;
     static id sharedInstance;
@@ -1251,12 +1260,35 @@ typedef void (^CRToastAnimationStepBlock)(void);
 
 #pragma mark - Notification Management
 
+- (void)cr_postNotificationsDidChange
+{
+	[[NSNotificationCenter defaultCenter] postNotificationName:CRNumberOfNotificationsDidChangeNotification object:self];
+}
+
+- (void)cr_removeNotification:(CRToast *)notification
+{
+	[self.notifications removeObject:notification];
+	[self cr_postNotificationsDidChange];
+}
+
+- (void)cr_removeAllNotifications
+{
+	[self.notifications removeAllObjects];
+	[self cr_postNotificationsDidChange];
+}
+
+- (void)cr_addNotification:(CRToast *)notification
+{
+	[self.notifications addObject:notification];
+	[self cr_postNotificationsDidChange];
+}
+
 CRToastAnimationCompletionBlock CRToastOutwardAnimationsCompletionBlock(CRToastManager *weakSelf) {
     return ^void(BOOL completed){
         weakSelf.notificationWindow.rootViewController.view.gestureRecognizers = nil;
         weakSelf.notification.state = CRToastStateCompleted;
         if (weakSelf.notification.completion) weakSelf.notification.completion();
-        [weakSelf.notifications removeObject:weakSelf.notification];
+        [weakSelf cr_removeNotification:weakSelf.notification];
         [weakSelf.notificationView removeFromSuperview];
         [weakSelf.statusBarView removeFromSuperview];
         if (weakSelf.notifications.count > 0) {
@@ -1344,12 +1376,12 @@ CRToastAnimationStepBlock CRToastOutwardAnimationsSetupBlock(CRToastManager *wea
 
 - (void)dismissAllNotifications:(BOOL)animated {
     [self dismissNotification:animated];
-    [self.notifications removeAllObjects];
+	[self cr_removeAllNotifications];
 }
 
 - (void)addNotification:(CRToast*)notification {
     BOOL showingNotification = self.showingNotification;
-    [_notifications addObject:notification];
+	[self cr_addNotification:notification];
     if (!showingNotification) {
         [self displayNotification:notification];
     }
