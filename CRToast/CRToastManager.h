@@ -9,6 +9,11 @@
 #import <Foundation/Foundation.h>
 
 /**
+ This notification is posted when the number of notifications in the queue changes
+ */
+NSString * const CRNumberOfNotificationsDidChangeNotification;
+
+/**
  A toast manager providing Class level API's for the presentation of notifications with a variery of options
  */
 
@@ -78,5 +83,10 @@
  If no identifier is specified for the @c kCRToastIdentifier when created, it will be excluded from this collection.
  */
 + (NSArray *)notificationIdentifiersInQueue;
+
+/**
+ Returns the total number of notifications in queue, including what is currently being shown
+ */
++ (NSUInteger)numberOfNotifications;
 
 @end

@@ -14,6 +14,8 @@
 #import "CRToastWindow.h"
 #import "CRToastLayoutHelpers.h"
 
+NSString * const CRNumberOfNotificationsDidChangeNotification = @"CRNumberOfNotificationsDidChangeNotification";
+
 @interface CRToast (CRToastManager)
 + (void)setDefaultOptions:(NSDictionary*)defaultOptions;
 + (instancetype)notificationWithOptions:(NSDictionary*)options appearanceBlock:(void (^)(void))appearance completionBlock:(void (^)(void))completion;
@@ -77,6 +79,11 @@ typedef void (^CRToastAnimationStepBlock)(void);
     return [[self manager] notificationIdentifiersInQueue];
 }
 
++ (NSUInteger)numberOfNotifications
+{
+	return [[[self manager] notificationsInQueue] count];
+}
+
 + (instancetype)manager {
     static dispatch_once_t once;
     static id sharedInstance;
@@ -103,6 +110,31 @@ typedef void (^CRToastAnimationStepBlock)(void);
 }
 
 #pragma mark - -- Notification Management --
+#pragma mark Private Methods Adding/Removing Notifications From Queue
+- (void)cr_postNotificationsDidChange {
+	[[NSNotificationCenter defaultCenter] postNotificationName:CRNumberOfNotificationsDidChangeNotification object:self];
+}
+
+- (void)cr_removeNotification:(CRToast *)notification {
+	[self.notifications removeObject:notification];
+	[self cr_postNotificationsDidChange];
+}
+
+- (void)cr_removeNotificationsAtIndexes:(NSIndexSet *)indexSet {
+	[self.notifications removeObjectsAtIndexes:indexSet];
+	[self cr_postNotificationsDidChange];
+}
+
+- (void)cr_removeAllNotifications {
+	[self.notifications removeAllObjects];
+	[self cr_postNotificationsDidChange];
+}
+
+- (void)cr_addNotification:(CRToast *)notification {
+	[self.notifications addObject:notification];
+	[self cr_postNotificationsDidChange];
+}
+
 #pragma mark - Notification Animation Blocks
 #pragma mark Inward Animations
 CRToastAnimationStepBlock CRToastInwardAnimationsBlock(CRToastManager *weakSelf, CRToast *notification) {
@@ -137,7 +169,7 @@ CRToastAnimationCompletionBlock CRToastOutwardAnimationsCompletionBlock(CRToastM
         weakSelf.notificationWindow.rootViewController.view.gestureRecognizers = nil;
         weakSelf.notification.state = CRToastStateCompleted;
         if (weakSelf.notification.completion) weakSelf.notification.completion();
-        [weakSelf.notifications removeObject:weakSelf.notification];
+		[weakSelf cr_removeNotification:weakSelf.notification];
         [weakSelf.notificationView removeFromSuperview];
         [weakSelf.statusBarView removeFromSuperview];
         if (weakSelf.notifications.count > 0) {
@@ -213,6 +245,10 @@ CRToastAnimationStepBlock CRToastOutwardAnimationsSetupBlock(CRToastManager *wea
 
 #pragma mark -
 
+- (NSArray *)notificationsInQueue {
+	return [_notifications copy];
+}
+
 - (NSArray *)notificationIdentifiersInQueue {
     if (_notifications.count == 0) { return @[]; }
     return [[_notifications valueForKeyPath:@"options.kCRToastIdentifierKey"] filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"SELF != nil"]];
@@ -232,7 +268,7 @@ CRToastAnimationStepBlock CRToastOutwardAnimationsSetupBlock(CRToastManager *wea
 
 - (void)dismissAllNotifications:(BOOL)animated {
     [self dismissNotification:animated];
-    [self.notifications removeAllObjects];
+	[self cr_removeAllNotifications];
 }
 
 - (void)dismissAllNotificationsWithIdentifier:(NSString *)identifer animated:(BOOL)animated {
@@ -249,13 +285,13 @@ CRToastAnimationStepBlock CRToastOutwardAnimationsSetupBlock(CRToastManager *wea
             }
         }
     }];
-    [self.notifications removeObjectsAtIndexes:indexes];
+	[self cr_removeNotificationsAtIndexes:indexes];
     if (callDismiss) { [self dismissNotification:animated]; }
 }
 
 - (void)addNotification:(CRToast*)notification {
     BOOL showingNotification = self.showingNotification;
-    [_notifications addObject:notification];
+	[self cr_addNotification:notification];
     if (!showingNotification) {
         [self displayNotification:notification];
     }
